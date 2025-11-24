@@ -1,0 +1,81 @@
+name: FDSE Challenge - Hidden Tests (Manual Trigger)
+
+# This workflow runs the hidden tests that are NOT visible to candidates
+# Only maintainers can trigger this manually for final evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to evaluate'
+        required: true
+        type: number
+
+jobs:
+  hidden-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout candidate code
+      uses: actions/checkout@v4
+      with:
+        ref: refs/pull/${{ inputs.pr_number }}/head
+    
+    - name: Checkout hidden tests
+      uses: actions/checkout@v4
+      with:
+        repository: Xelerit-Robotics/applicant-dojo-hidden-tests
+        token: ${{ secrets.HIDDEN_TESTS_TOKEN }}
+        path: tests_hidden
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run hidden tests
+      run: |
+        pytest tests_hidden/test_hidden.py -v --tb=short --junit-xml=hidden-test-results.xml
+      continue-on-error: true
+    
+    - name: Generate evaluation report
+      if: always()
+      run: |
+        echo "# Hidden Tests Evaluation Report" > evaluation.md
+        echo "" >> evaluation.md
+        echo "**PR Number:** ${{ inputs.pr_number }}" >> evaluation.md
+        echo "**Date:** $(date)" >> evaluation.md
+        echo "" >> evaluation.md
+        echo "## Test Results" >> evaluation.md
+        pytest tests_hidden/test_hidden.py -v --tb=line >> evaluation.md 2>&1 || true
+    
+    - name: Upload hidden test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: hidden-test-results-pr-${{ inputs.pr_number }}
+        path: |
+          hidden-test-results.xml
+          evaluation.md
+    
+    - name: Comment on PR
+      if: always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const evaluation = fs.readFileSync('evaluation.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: ${{ inputs.pr_number }},
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## 🔒 Hidden Tests Evaluation\n\n' + 
+                  'Results available in workflow artifacts.\n' +
+                  'Reviewer: Please check the detailed report.'
+          });

@@ -49,6 +49,9 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+test-results.xml
+hidden-test-results.xml
+evaluation.md
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -73,4 +76,8 @@ site/
 .DS_Store
 
 # System files
-Thumbs.db 
+Thumbs.db
+
+# Hidden tests (keep confidential)
+tests_hidden/test_hidden.py
+!tests_hidden/README.md 
