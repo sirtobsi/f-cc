@@ -155,4 +155,4 @@ See [REVIEWER_GUIDE.md](../REVIEWER_GUIDE.md) for detailed rubric.
 
 **Version:** 1.0  
 **Last Updated:** November 2025  
-**Maintained by:** Xelerit Robotics Hiring Team 
+**Maintained by:** Forgis Hiring Team 

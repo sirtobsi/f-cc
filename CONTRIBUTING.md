@@ -19,7 +19,7 @@ If you're completing this challenge as part of your interview process:
 - Do NOT modify test files or the data simulator
 
 ### Hiring Team
-If you're part of the Xelerit hiring team:
+If you're part of the Forgis hiring team:
 - See `REVIEWER_GUIDE.md` for evaluation procedures
 - See `SETUP_GUIDE.md` for repository maintenance
 - Contact the technical lead before making changes to core challenge components

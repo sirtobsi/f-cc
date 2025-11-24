@@ -1,13 +1,13 @@
 # FDSE Pre-Interview Challenge
 
-Welcome! This is a 2-3 hour technical challenge for the **Forward Deployed Software Engineer** position at Xelerit Robotics.
+Welcome! This is a 2 hour technical challenge for the **Forward Deployed Software Engineer** position at Forgis.
 
 ## 🎯 Challenge Overview
 
 You'll build a data processing pipeline for industrial sensor data, handling real-world challenges like connection failures, missing values, and noisy readings. This mirrors the type of work our FDSEs do daily.
 
 **Key Points:**
-- ⏱️ **Time-boxed:** 2-3 hours (full completion is not expected)
+- ⏱️ **Time-boxed:** 2 hours (full completion is not expected)
 - 📊 **Focus:** Quality over quantity - demonstrate thoughtful engineering
 - 🛡️ **Priorities:** Robustness, error handling, and clear communication
 - 📝 **Documentation:** Your reasoning matters as much as your code
@@ -218,4 +218,4 @@ This challenge is for evaluation purposes only. Please do not share solutions pu
 
 **Good luck!** We're excited to see your approach to real-world data engineering challenges. Remember: thoughtful partial solutions beat rushed complete solutions.
 
-*Xelerit Robotics - Building the future of industrial automation* 
+*Forgis - Building the future of industrial automation* 
