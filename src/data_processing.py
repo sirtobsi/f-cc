@@ -63,10 +63,54 @@ def ingest_data(
     - Consider filtering by quality flags
     - Document your data cleaning strategy in NOTES.md
     """
-    # TODO: Implement this function
-    raise NotImplementedError(
-        "ingest_data() must be implemented by the candidate"
-    )
+    # Validate input
+    if not data_batches:
+        raise ValueError("data_batches cannot be empty")
+    
+    # Filter out empty or invalid batches
+    valid_batches = []
+    for batch in data_batches:
+        if not isinstance(batch, pd.DataFrame):
+            raise ValueError("All batches must be pandas DataFrames")
+        if not batch.empty:
+            valid_batches.append(batch)
+    
+    # If all batches are empty, raise an error
+    if not valid_batches:
+        raise ValueError("All data batches are empty")
+    
+    # Concatenate all batches
+    consolidated = pd.concat(valid_batches, ignore_index=True)
+    
+    # Validate required columns
+    required_columns = ["timestamp", "sensor", "value", "unit", "quality"]
+    missing_columns = [col for col in required_columns if col not in consolidated.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {missing_columns}")
+    
+    if validate:
+        # Remove exact duplicates (all columns match)
+        consolidated = consolidated.drop_duplicates()
+        
+        # Remove duplicates based on timestamp + sensor (keep first occurrence)
+        # This handles cases where the same sensor reading at same time appears multiple times
+        consolidated = consolidated.drop_duplicates(subset=["timestamp", "sensor"], keep="first")
+        
+        # Sort by timestamp for chronological order
+        consolidated = consolidated.sort_values("timestamp").reset_index(drop=True)
+        
+        # Optional: Filter out BAD quality readings (keeping GOOD and UNCERTAIN)
+        # Note: Keeping UNCERTAIN as they may still have value
+        # Keeping BAD readings as well since they provide context about sensor issues
+        # This is a design decision - can be adjusted based on requirements
+        # consolidated = consolidated[consolidated["quality"] != "BAD"].reset_index(drop=True)
+        # For now, keep all quality levels to preserve data context.
+        
+    else:
+        # Even without validation, sort by timestamp for consistency
+        consolidated = consolidated.sort_values("timestamp").reset_index(drop=True)
+    
+    return consolidated
 
 
 def detect_anomalies(
