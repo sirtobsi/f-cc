@@ -329,7 +329,121 @@ def summarize_metrics(
     - Ensure robust handling of edge cases (all nulls, single value, etc.)
     - Document your metric choices in NOTES.md
     """
-    # TODO: Implement this function
-    raise NotImplementedError(
-        "summarize_metrics() must be implemented by the candidate"
-    )
+    # Validate input data
+    if data is None or data.empty:
+        raise ValueError("Data cannot be empty")
+    
+    # Validate group_by column exists
+    if group_by and group_by not in data.columns:
+        raise ValueError(f"Column '{group_by}' not found in data")
+    
+    # Check if anomaly detection columns are present
+    has_anomaly_data = "is_anomaly" in data.columns
+    
+    # Handle time-based grouping
+    if time_window:
+        if "timestamp" not in data.columns:
+            raise ValueError("Data must contain 'timestamp' column for time-based aggregation")
+        
+        # Set timestamp as index for resampling
+        data_copy = data.copy()
+        data_copy = data_copy.set_index("timestamp")
+        
+        # Group by time_window and group_by column
+        if group_by:
+            grouped = data_copy.groupby([pd.Grouper(freq=time_window), group_by])
+        else:
+            grouped = data_copy.groupby(pd.Grouper(freq=time_window))
+        
+        # Build time-indexed nested dictionary
+        result = {}
+        for key, group in grouped:
+            if group_by:
+                time_key, group_key = key
+                time_str = str(time_key)
+                if time_str not in result:
+                    result[time_str] = {}
+                result[time_str][group_key] = _compute_group_metrics(group, has_anomaly_data)
+            else:
+                time_str = str(key)
+                result[time_str] = _compute_group_metrics(group, has_anomaly_data)
+        
+        return result
+    
+    # No time window - compute overall statistics by group_by
+    if group_by:
+        grouped = data.groupby(group_by)
+        result = {}
+        
+        for group_name, group_data in grouped:
+            result[group_name] = _compute_group_metrics(group_data, has_anomaly_data)
+        
+        return result
+    else:
+        # No grouping at all - compute metrics for entire dataset
+        return {"overall": _compute_group_metrics(data, has_anomaly_data)}
+
+
+def _compute_group_metrics(group_data: pd.DataFrame, has_anomaly_data: bool) -> Dict[str, float]:
+    """
+    Helper function to compute metrics for a group of data.
+    
+    Args:
+        group_data: DataFrame containing the group's data
+        has_anomaly_data: Whether anomaly detection columns are present
+    
+    Returns:
+        Dictionary of metrics for the group
+    """
+    metrics = {}
+    
+    # Get the value column
+    values = group_data["value"]
+    
+    # Basic statistics
+    metrics["count"] = int(len(values))
+    metrics["null_count"] = int(values.isna().sum())
+    
+    # Only compute statistics on non-null values
+    valid_values = values.dropna()
+    
+    if len(valid_values) > 0:
+        metrics["mean"] = float(valid_values.mean())
+        metrics["std"] = float(valid_values.std()) if len(valid_values) > 1 else 0.0
+        metrics["min"] = float(valid_values.min())
+        metrics["max"] = float(valid_values.max())
+        metrics["median"] = float(valid_values.median())
+    else:
+        # All values are null
+        metrics["mean"] = 0.0
+        metrics["std"] = 0.0
+        metrics["min"] = 0.0
+        metrics["max"] = 0.0
+        metrics["median"] = 0.0
+    
+    # Data quality metrics
+    if "quality" in group_data.columns:
+        total_count = len(group_data)
+        good_count = (group_data["quality"] == "GOOD").sum()
+        bad_count = (group_data["quality"] == "BAD").sum()
+        uncertain_count = (group_data["quality"] == "UNCERTAIN").sum()
+        
+        metrics["good_quality_pct"] = float((good_count / total_count * 100) if total_count > 0 else 0.0)
+        metrics["bad_quality_pct"] = float((bad_count / total_count * 100) if total_count > 0 else 0.0)
+        metrics["uncertain_quality_pct"] = float((uncertain_count / total_count * 100) if total_count > 0 else 0.0)
+    
+    # Anomaly metrics (if available)
+    if has_anomaly_data:
+        anomaly_count = group_data["is_anomaly"].sum()
+        total_count = len(group_data)
+        metrics["anomaly_count"] = int(anomaly_count)
+        metrics["anomaly_rate"] = float((anomaly_count / total_count * 100) if total_count > 0 else 0.0)
+        
+        # Average anomaly score for detected anomalies
+        anomalies = group_data[group_data["is_anomaly"] == True]
+        if len(anomalies) > 0 and "anomaly_score" in group_data.columns:
+            metrics["avg_anomaly_score"] = float(anomalies["anomaly_score"].mean())
+        else:
+            metrics["avg_anomaly_score"] = 0.0
+    
+    return metrics
