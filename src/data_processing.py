@@ -160,10 +160,114 @@ def detect_anomalies(
     - Think about edge cases: what if all data is anomalous? None is?
     - Document your approach and limitations in NOTES.md
     """
-    # TODO: Implement this function
-    raise NotImplementedError(
-        "detect_anomalies() must be implemented by the candidate"
-    )
+    # Validate that the sensor exists in the data
+    if sensor_name not in data["sensor"].values:
+        raise ValueError(f"Sensor '{sensor_name}' not found in data")
+    
+    # Validate the method
+    supported_methods = ["zscore", "iqr", "rolling"]
+    if method not in supported_methods:
+        raise ValueError(f"Method '{method}' not supported. Choose from: {supported_methods}")
+    
+    # Make a copy to avoid modifying the original data
+    result = data.copy()
+    
+    # Filter data for the specific sensor
+    sensor_mask = result["sensor"] == sensor_name
+    sensor_data = result.loc[sensor_mask, "value"].copy()
+    
+    # Check if we have sufficient valid data
+    valid_data = sensor_data.dropna()
+    if len(valid_data) < 2:
+        raise ValueError(f"Insufficient data for sensor '{sensor_name}'. Need at least 2 valid readings.")
+    
+    # Initialize anomaly columns for all rows
+    result["is_anomaly"] = False
+    result["anomaly_score"] = 0.0
+    result["detection_method"] = ""
+    
+    # Apply the selected detection method
+    if method == "zscore":
+        # Z-score method: Flag values beyond threshold standard deviations from mean
+        mean = valid_data.mean()
+        std = valid_data.std()
+        
+        # Handle case where std is 0 (all values are the same)
+        if std == 0:
+            # No variance means no anomalies
+            anomaly_scores = pd.Series(0.0, index=sensor_data.index)
+        else:
+            # Calculate z-scores for all sensor readings
+            z_scores = np.abs((sensor_data - mean) / std)
+            anomaly_scores = z_scores
+            
+            # Flag anomalies where |z-score| > threshold
+            is_anomaly = z_scores > threshold
+            result.loc[sensor_mask, "is_anomaly"] = is_anomaly.fillna(False)
+        
+        result.loc[sensor_mask, "anomaly_score"] = anomaly_scores.fillna(0.0)
+    
+    elif method == "iqr":
+        # IQR method: Flag values beyond threshold * IQR from quartiles
+        q1 = valid_data.quantile(0.25)
+        q3 = valid_data.quantile(0.75)
+        iqr = q3 - q1
+        
+        # Handle case where IQR is 0
+        if iqr == 0:
+            # No variance in middle 50% means we use a simpler check
+            anomaly_scores = pd.Series(0.0, index=sensor_data.index)
+        else:
+            # Calculate bounds
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+            
+            # Calculate how far outside the bounds each value is
+            below_lower = np.maximum(0, lower_bound - sensor_data)
+            above_upper = np.maximum(0, sensor_data - upper_bound)
+            
+            # Anomaly score is the distance outside bounds, normalized by IQR
+            anomaly_scores = (below_lower + above_upper) / iqr if iqr > 0 else pd.Series(0.0, index=sensor_data.index)
+            
+            # Flag as anomaly if outside bounds
+            is_anomaly = (sensor_data < lower_bound) | (sensor_data > upper_bound)
+            result.loc[sensor_mask, "is_anomaly"] = is_anomaly.fillna(False)
+        
+        result.loc[sensor_mask, "anomaly_score"] = anomaly_scores.fillna(0.0)
+    
+    elif method == "rolling":
+        # Rolling method: Flag based on rolling window statistics
+        # Use a window size based on data length (at least 5, max 20)
+        window_size = min(max(5, len(valid_data) // 10), 20)
+        
+        if len(valid_data) < window_size:
+            raise ValueError(f"Insufficient data for rolling method. Need at least {window_size} valid readings.")
+        
+        # Sort by timestamp for proper rolling window calculation
+        sensor_indices = result[sensor_mask].index
+        sensor_subset = result.loc[sensor_mask].copy()
+        
+        # Calculate rolling mean and std
+        rolling_mean = sensor_subset["value"].rolling(window=window_size, center=True, min_periods=1).mean()
+        rolling_std = sensor_subset["value"].rolling(window=window_size, center=True, min_periods=1).std()
+        
+        # Handle cases where rolling_std is 0 or NaN
+        rolling_std = rolling_std.fillna(valid_data.std())
+        rolling_std = rolling_std.replace(0, valid_data.std() if valid_data.std() > 0 else 1.0)
+        
+        # Calculate deviation from rolling statistics
+        deviations = np.abs((sensor_subset["value"] - rolling_mean) / rolling_std)
+        anomaly_scores = deviations
+        
+        # Flag anomalies
+        is_anomaly = deviations > threshold
+        result.loc[sensor_mask, "is_anomaly"] = is_anomaly.fillna(False)
+        result.loc[sensor_mask, "anomaly_score"] = anomaly_scores.fillna(0.0)
+    
+    # Set detection method for the sensor rows
+    result.loc[sensor_mask, "detection_method"] = method
+    
+    return result
 
 
 def summarize_metrics(
